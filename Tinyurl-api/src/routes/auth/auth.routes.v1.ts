@@ -23,7 +23,7 @@ authRouterV1.get('/google', AuthController.authenticateGoogle);
 authRouterV1.get(
   '/google/redirect',
   AuthController.authenticateGoogleCallback,
-  AuthController.login,
+  AuthController.completeGoogleLogin,
 );
 
 export default authRouterV1;
