@@ -106,19 +106,22 @@ export default class AuthController {
     }
   }
 
+  // This route is reached via a full browser navigation (the Google
+  // redirect), not a fetch/XHR call, so failures here redirect back to the
+  // frontend's login page with an error message rather than returning JSON.
   static authenticateGoogleCallback(this: void, req: Request, res: Response, next: NextFunction) {
     try {
       const authenticate = passport.authenticate(
         'google',
         { session: false },
         (err: unknown, user: Express.User | false, info: unknown) => {
-          if (err) {
-            next(err);
-            return;
-          }
-          if (!user) {
-            const message = isMessageInfo(info) ? info.message : 'Google authentication failed';
-            next(new BaseError(message, 401));
+          if (err || !user) {
+            const message = err
+              ? 'Google authentication failed'
+              : isMessageInfo(info)
+                ? info.message
+                : 'Google authentication failed';
+            res.redirect(302, AuthController.loginErrorUrl(message));
             return;
           }
           req.user = user;
@@ -129,5 +132,36 @@ export default class AuthController {
     } catch (err) {
       return next(err);
     }
+  }
+
+  // Issues tokens for the google-authenticated user and hands them to the
+  // frontend via a redirect, since the browser is mid-navigation here and
+  // can't read a JSON response body the way an API client would.
+  static async completeGoogleLogin(this: void, req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        res.redirect(302, AuthController.loginErrorUrl('Invalid credentials'));
+        return;
+      }
+
+      const user = await UsersService.issueTokens(req.user);
+      const callbackUrl = new URL('/auth/callback', AuthController.webAppUrl());
+      callbackUrl.searchParams.set('accessToken', user.accessToken ?? '');
+      callbackUrl.searchParams.set('refreshToken', user.refreshToken ?? '');
+
+      res.redirect(302, callbackUrl.toString());
+    } catch (err) {
+      return next(err);
+    }
+  }
+
+  private static webAppUrl(): string {
+    return process.env['WEB_APP_URL'] ?? 'http://localhost:3000';
+  }
+
+  private static loginErrorUrl(message: string): string {
+    const url = new URL('/login', AuthController.webAppUrl());
+    url.searchParams.set('error', message);
+    return url.toString();
   }
 }
