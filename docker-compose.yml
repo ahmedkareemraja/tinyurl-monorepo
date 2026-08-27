@@ -1,0 +1,38 @@
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+
+  kgs:
+    build:
+      context: .
+      dockerfile: kgs/Dockerfile
+    env_file: kgs/.env.docker
+    depends_on:
+      - mongo
+      - redis
+    ports:
+      - '8081:8081'
+
+  tinyurl-api:
+    build:
+      context: .
+      dockerfile: Tinyurl-api/Dockerfile
+    env_file: Tinyurl-api/.env.docker
+    depends_on:
+      - mongo
+      - redis
+      - kgs
+    ports:
+      - '8080:8080'
+
+volumes:
+  mongo-data:
